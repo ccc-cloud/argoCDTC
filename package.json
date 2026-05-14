@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ccc-cloud/argoCDTC.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ccc-cloud/argoCDTC/issues"
+  },
+  "homepage": "https://github.com/ccc-cloud/argoCDTC#readme",
   "engines": {
     "vscode": "^1.92.0"
   },
@@ -62,7 +70,9 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "check": "tsc -p ./ --noEmit"
+    "check": "tsc -p ./ --noEmit",
+    "vsix": "vsce package",
+    "publish:marketplace": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^20.14.12",
