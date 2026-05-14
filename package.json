@@ -1,0 +1,461 @@
+{
+  "name": "argocd-toolkit",
+  "displayName": "Argo CD Toolkit",
+  "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "argocd",
+    "argo cd",
+    "gitops",
+    "kubernetes",
+    "vscode"
+  ],
+  "activationEvents": [
+    "onView:argocdApplications",
+    "onView:argocdProjects",
+    "onView:argocdClusters",
+    "onView:argocdRepositories",
+    "onView:argocdContexts",
+    "onCommand:argocd.refreshAll",
+    "onCommand:argocd.login",
+    "onCommand:argocd.logout",
+    "onCommand:argocd.relogin",
+    "onCommand:argocd.version",
+    "onCommand:argocd.openUi",
+    "onCommand:argocd.runCatalogCommand",
+    "onCommand:argocd.runArbitraryCli",
+    "onCommand:argocd.app.create",
+    "onCommand:argocd.app.get",
+    "onCommand:argocd.app.sync",
+    "onCommand:argocd.app.refresh",
+    "onCommand:argocd.app.hardRefresh",
+    "onCommand:argocd.app.diff",
+    "onCommand:argocd.app.logs",
+    "onCommand:argocd.app.manifests",
+    "onCommand:argocd.app.resources",
+    "onCommand:argocd.app.history",
+    "onCommand:argocd.app.wait",
+    "onCommand:argocd.app.rollback",
+    "onCommand:argocd.app.terminateOperation",
+    "onCommand:argocd.app.delete",
+    "onCommand:argocd.project.create",
+    "onCommand:argocd.project.get",
+    "onCommand:argocd.project.delete",
+    "onCommand:argocd.repo.add",
+    "onCommand:argocd.repo.get",
+    "onCommand:argocd.repo.remove",
+    "onCommand:argocd.cluster.add",
+    "onCommand:argocd.cluster.get",
+    "onCommand:argocd.cluster.remove",
+    "onCommand:argocd.context.use"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "check": "tsc -p ./ --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.12",
+    "@types/vscode": "^1.92.0",
+    "typescript": "^5.5.4"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Argo CD Toolkit",
+      "properties": {
+        "argocd.cliPath": {
+          "type": "string",
+          "default": "argocd",
+          "description": "Path to the Argo CD CLI executable."
+        },
+        "argocd.defaultServer": {
+          "type": "string",
+          "default": "",
+          "description": "Default Argo CD server used by login, open UI, and commands when set."
+        },
+        "argocd.defaultContext": {
+          "type": "string",
+          "default": "",
+          "description": "Default Argo CD CLI context to pass with --argocd-context."
+        },
+        "argocd.core": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use the Argo CD CLI --core mode."
+        },
+        "argocd.kubeContext": {
+          "type": "string",
+          "default": "",
+          "description": "Kubernetes context to pass to Argo CD CLI commands."
+        },
+        "argocd.insecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --insecure to Argo CD CLI commands."
+        },
+        "argocd.grpcWeb": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --grpc-web to Argo CD CLI commands."
+        },
+        "argocd.plaintext": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --plaintext to Argo CD CLI commands."
+        },
+        "argocd.portForward": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --port-forward to Argo CD CLI commands."
+        },
+        "argocd.portForwardNamespace": {
+          "type": "string",
+          "default": "",
+          "description": "Namespace to pass with --port-forward-namespace."
+        },
+        "argocd.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra global arguments appended to every Argo CD CLI invocation."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "argocd",
+          "title": "Argo CD",
+          "icon": "resources/argocd.svg"
+        }
+      ]
+    },
+    "views": {
+      "argocd": [
+        {
+          "id": "argocdApplications",
+          "name": "Applications"
+        },
+        {
+          "id": "argocdProjects",
+          "name": "Projects"
+        },
+        {
+          "id": "argocdClusters",
+          "name": "Clusters"
+        },
+        {
+          "id": "argocdRepositories",
+          "name": "Repositories"
+        },
+        {
+          "id": "argocdContexts",
+          "name": "Contexts"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "argocd.refreshAll",
+        "title": "Argo CD: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "argocd.login",
+        "title": "Argo CD: Login",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "argocd.logout",
+        "title": "Argo CD: Logout",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "argocd.relogin",
+        "title": "Argo CD: Relogin"
+      },
+      {
+        "command": "argocd.version",
+        "title": "Argo CD: Show Version"
+      },
+      {
+        "command": "argocd.openUi",
+        "title": "Argo CD: Open UI",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "argocd.runCatalogCommand",
+        "title": "Argo CD: Run Command from Catalog"
+      },
+      {
+        "command": "argocd.runArbitraryCli",
+        "title": "Argo CD: Run Any CLI Command"
+      },
+      {
+        "command": "argocd.app.create",
+        "title": "Argo CD: Create Application",
+        "icon": "$(add)"
+      },
+      {
+        "command": "argocd.app.get",
+        "title": "Argo CD Application: Details",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "argocd.app.sync",
+        "title": "Argo CD Application: Sync",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "argocd.app.refresh",
+        "title": "Argo CD Application: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "argocd.app.hardRefresh",
+        "title": "Argo CD Application: Hard Refresh",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "argocd.app.diff",
+        "title": "Argo CD Application: Diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "argocd.app.logs",
+        "title": "Argo CD Application: Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "argocd.app.manifests",
+        "title": "Argo CD Application: Manifests"
+      },
+      {
+        "command": "argocd.app.resources",
+        "title": "Argo CD Application: Resources"
+      },
+      {
+        "command": "argocd.app.history",
+        "title": "Argo CD Application: History"
+      },
+      {
+        "command": "argocd.app.wait",
+        "title": "Argo CD Application: Wait"
+      },
+      {
+        "command": "argocd.app.rollback",
+        "title": "Argo CD Application: Rollback"
+      },
+      {
+        "command": "argocd.app.terminateOperation",
+        "title": "Argo CD Application: Terminate Operation",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "argocd.app.delete",
+        "title": "Argo CD Application: Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "argocd.project.create",
+        "title": "Argo CD: Create Project"
+      },
+      {
+        "command": "argocd.project.get",
+        "title": "Argo CD Project: Details"
+      },
+      {
+        "command": "argocd.project.delete",
+        "title": "Argo CD Project: Delete"
+      },
+      {
+        "command": "argocd.repo.add",
+        "title": "Argo CD: Add Repository"
+      },
+      {
+        "command": "argocd.repo.get",
+        "title": "Argo CD Repository: Details"
+      },
+      {
+        "command": "argocd.repo.remove",
+        "title": "Argo CD Repository: Remove"
+      },
+      {
+        "command": "argocd.cluster.add",
+        "title": "Argo CD: Add Cluster"
+      },
+      {
+        "command": "argocd.cluster.get",
+        "title": "Argo CD Cluster: Details"
+      },
+      {
+        "command": "argocd.cluster.remove",
+        "title": "Argo CD Cluster: Remove"
+      },
+      {
+        "command": "argocd.context.use",
+        "title": "Argo CD Context: Use"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "argocd.refreshAll",
+          "when": "view =~ /^argocd/",
+          "group": "navigation"
+        },
+        {
+          "command": "argocd.app.create",
+          "when": "view == argocdApplications",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "argocd.app.get",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "inline@1"
+        },
+        {
+          "command": "argocd.app.sync",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "inline@2"
+        },
+        {
+          "command": "argocd.app.refresh",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "inline@3"
+        },
+        {
+          "command": "argocd.app.hardRefresh",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.diff",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.logs",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.manifests",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.resources",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.history",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
+        },
+        {
+          "command": "argocd.app.wait",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "3_operations"
+        },
+        {
+          "command": "argocd.app.rollback",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "3_operations"
+        },
+        {
+          "command": "argocd.app.terminateOperation",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "3_operations"
+        },
+        {
+          "command": "argocd.app.delete",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "4_danger"
+        },
+        {
+          "command": "argocd.project.get",
+          "when": "view == argocdProjects && viewItem == argocdProject",
+          "group": "inline@1"
+        },
+        {
+          "command": "argocd.project.delete",
+          "when": "view == argocdProjects && viewItem == argocdProject",
+          "group": "2_project"
+        },
+        {
+          "command": "argocd.repo.get",
+          "when": "view == argocdRepositories && viewItem == argocdRepo",
+          "group": "inline@1"
+        },
+        {
+          "command": "argocd.repo.remove",
+          "when": "view == argocdRepositories && viewItem == argocdRepo",
+          "group": "2_repo"
+        },
+        {
+          "command": "argocd.cluster.get",
+          "when": "view == argocdClusters && viewItem == argocdCluster",
+          "group": "inline@1"
+        },
+        {
+          "command": "argocd.cluster.remove",
+          "when": "view == argocdClusters && viewItem == argocdCluster",
+          "group": "2_cluster"
+        },
+        {
+          "command": "argocd.context.use",
+          "when": "view == argocdContexts && viewItem == argocdContext",
+          "group": "inline@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "argocd.refreshAll"
+        },
+        {
+          "command": "argocd.login"
+        },
+        {
+          "command": "argocd.logout"
+        },
+        {
+          "command": "argocd.relogin"
+        },
+        {
+          "command": "argocd.version"
+        },
+        {
+          "command": "argocd.openUi"
+        },
+        {
+          "command": "argocd.runCatalogCommand"
+        },
+        {
+          "command": "argocd.runArbitraryCli"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "yaml",
+        "path": "./snippets/argocd.code-snippets"
+      }
+    ]
+  }
+}
