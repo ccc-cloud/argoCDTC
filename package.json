@@ -3,7 +3,7 @@
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
   "version": "0.1.0",
-  "publisher": "local",
+  "publisher": "TripleC",
   "license": "MIT",
   "repository": {
     "type": "git",
