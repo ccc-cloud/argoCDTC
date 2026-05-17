@@ -98,6 +98,17 @@
           "default": "",
           "description": "Default Argo CD CLI context to pass with --argocd-context."
         },
+        "argocd.applicationsAutoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh the Applications view so sync and health status changes appear without manual refresh."
+        },
+        "argocd.applicationsAutoRefreshIntervalSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "Seconds between automatic Applications view refreshes when argocd.applicationsAutoRefresh is enabled."
+        },
         "argocd.core": {
           "type": "boolean",
           "default": false,
@@ -316,7 +327,8 @@
       },
       {
         "command": "argocd.context.use",
-        "title": "Argo CD Context: Use"
+        "title": "Argo CD Context: Use",
+        "icon": "$(check)"
       }
     ],
     "menus": {

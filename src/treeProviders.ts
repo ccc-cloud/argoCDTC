@@ -56,9 +56,20 @@ export abstract class RefreshableTreeProvider<T> implements vscode.TreeDataProvi
   protected abstract toTreeItem(value: T): ArgoTreeItem<T>;
 
   protected message(text: string, icon = "info"): ArgoTreeItem<string> {
-    const item = new ArgoTreeItem<string>("message", text, text);
+    const label = text.split(/\r?\n/, 1)[0] || text;
+    const item = new ArgoTreeItem<string>("message", text, label);
     item.iconPath = new vscode.ThemeIcon(icon);
     item.tooltip = text;
+    if (text !== label) {
+      item.description = "See tooltip";
+    }
+    if (/Argo CD session expired/i.test(text)) {
+      item.description = "Click to relogin";
+      item.command = {
+        command: "argocd.relogin",
+        title: "Relogin to Argo CD"
+      };
+    }
     return item;
   }
 }
@@ -72,19 +83,23 @@ export class ApplicationsProvider extends RefreshableTreeProvider<ArgoApplicatio
     const name = applicationName(app);
     const sync = app.status?.sync?.status ?? "Unknown";
     const health = app.status?.health?.status ?? "Unknown";
+    const operationPhase = app.status?.operationState?.phase ?? "";
+    const activity = isActiveOperation(operationPhase) ? "Syncing" : sync;
     const project = app.spec?.project ?? "default";
     const item = new ArgoTreeItem("application", app, name);
     item.contextValue = "argocdApp";
-    item.description = `${sync} / ${health}`;
+    item.description = `${activity} / ${health}`;
     item.tooltip = [
       `Application: ${name}`,
       `Project: ${project}`,
       `Sync: ${sync}`,
       `Health: ${health}`,
+      operationPhase ? `Operation: ${operationPhase}` : undefined,
+      app.status?.operationState?.message,
       `Destination: ${app.spec?.destination?.name ?? app.spec?.destination?.server ?? "unknown"}`,
       `Namespace: ${app.spec?.destination?.namespace ?? "default"}`
-    ].join("\n");
-    item.iconPath = statusIcon(sync, health);
+    ].filter(Boolean).join("\n");
+    item.iconPath = statusIcon(sync, health, operationPhase);
     item.command = {
       command: "argocd.app.get",
       title: "Open Application",
@@ -190,7 +205,7 @@ export class ContextsProvider extends RefreshableTreeProvider<ArgoContext> {
 
   protected toTreeItem(context: ArgoContext): ArgoTreeItem<ArgoContext> {
     const item = new ArgoTreeItem("context", context, context.name);
-    item.contextValue = "argocdContext";
+    item.contextValue = context.current ? "argocdContextCurrent" : "argocdContext";
     item.description = context.current ? "current" : context.server;
     item.tooltip = [
       `Context: ${context.name}`,
@@ -202,11 +217,21 @@ export class ContextsProvider extends RefreshableTreeProvider<ArgoContext> {
     item.iconPath = context.current
       ? new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"))
       : new vscode.ThemeIcon("server");
+    if (!context.current) {
+      item.command = {
+        command: "argocd.context.use",
+        title: "Use Argo CD Context",
+        arguments: [item]
+      };
+    }
     return item;
   }
 }
 
-function statusIcon(sync: string, health: string): vscode.ThemeIcon {
+function statusIcon(sync: string, health: string, operationPhase = ""): vscode.ThemeIcon {
+  if (isActiveOperation(operationPhase)) {
+    return new vscode.ThemeIcon("sync~spin", new vscode.ThemeColor("charts.blue"));
+  }
   if (health === "Degraded" || health === "Missing" || sync === "Unknown") {
     return new vscode.ThemeIcon("error", new vscode.ThemeColor("testing.iconErrored"));
   }
@@ -220,4 +245,8 @@ function statusIcon(sync: string, health: string): vscode.ThemeIcon {
     return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"));
   }
   return new vscode.ThemeIcon("circle-large-outline");
+}
+
+function isActiveOperation(phase: string): boolean {
+  return ["Running", "Terminating"].includes(phase);
 }

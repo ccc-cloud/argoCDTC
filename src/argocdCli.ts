@@ -9,7 +9,7 @@ import {
   ArgoRepository,
   asArray
 } from "./models";
-import { commandLine, runInTerminal } from "./terminal";
+import { commandLine, runInTerminal, shellQuote } from "./terminal";
 
 export interface CliResult {
   stdout: string;
@@ -22,6 +22,7 @@ export interface RunOptions {
   json?: boolean;
   allowFailure?: boolean;
   redact?: string[];
+  streamOutput?: boolean;
 }
 
 export class ArgoCdCli {
@@ -107,11 +108,19 @@ export class ArgoCdCli {
       let stderr = "";
 
       child.stdout.on("data", chunk => {
-        stdout += chunk.toString();
+        const text = chunk.toString();
+        stdout += text;
+        if (options.streamOutput) {
+          this.output.append(text);
+        }
       });
 
       child.stderr.on("data", chunk => {
-        stderr += chunk.toString();
+        const text = chunk.toString();
+        stderr += text;
+        if (options.streamOutput) {
+          this.output.append(text);
+        }
       });
 
       child.on("error", error => {
@@ -122,15 +131,15 @@ export class ArgoCdCli {
 
       child.on("close", code => {
         const result: CliResult = { stdout, stderr, code };
-        if (stdout.trim()) {
+        if (stdout.trim() && !options.streamOutput) {
           this.output.appendLine(stdout.trimEnd());
         }
-        if (stderr.trim()) {
+        if (stderr.trim() && !options.streamOutput) {
           this.output.appendLine(stderr.trimEnd());
         }
 
         if (code !== 0 && !options.allowFailure) {
-          reject(new Error(stderr.trim() || stdout.trim() || `argocd exited with code ${code}`));
+          reject(new Error(toUserFacingCliError(stderr.trim() || stdout.trim() || `argocd exited with code ${code}`, this.executable, this.server)));
           return;
         }
 
@@ -186,6 +195,43 @@ export class ArgoCdCli {
   }
 }
 
+export function toUserFacingCliError(message: string, executable = "argocd", server = ""): string {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return "Argo CD command failed.";
+  }
+
+  const tokenExpired = /invalid session|token is expired/i.test(trimmed) || (/unauthenticated/i.test(trimmed) && /session|token/i.test(trimmed));
+  const grpcWebRequired = /--grpc-web|grpc-web|failed to invoke grpc call/i.test(trimmed);
+
+  if (tokenExpired) {
+    const serverArg = server || "<ARGOCD_SERVER>";
+    const reloginArgs = grpcWebRequired ? ["relogin", "--grpc-web"] : ["relogin"];
+    const ssoLoginArgs = grpcWebRequired ? ["login", serverArg, "--sso", "--grpc-web"] : ["login", serverArg, "--sso"];
+    const passwordLoginArgs = grpcWebRequired
+      ? ["login", serverArg, "--username", "<USER>", "--password", "<PASSWORD>", "--grpc-web"]
+      : ["login", serverArg, "--username", "<USER>", "--password", "<PASSWORD>"];
+
+    return [
+      "Argo CD session expired. Run Argo CD: Relogin, or run one of these commands:",
+      `  ${exampleCommand(executable, reloginArgs)}`,
+      `  ${exampleCommand(executable, ssoLoginArgs)}`,
+      `  ${exampleCommand(executable, passwordLoginArgs)}`,
+      ...(grpcWebRequired ? ["This server also requires gRPC-Web. Set \"argocd.grpcWeb\": true in VS Code settings."] : [])
+    ].join("\n");
+  }
+
+  if (grpcWebRequired) {
+    return [
+      "Argo CD server requires gRPC-Web.",
+      "Set \"argocd.grpcWeb\": true in VS Code settings, then run Argo CD: Login again.",
+      `CLI example: ${exampleCommand(executable, ["login", server || "<ARGOCD_SERVER>", "--sso", "--grpc-web"])}`
+    ].join("\n");
+  }
+
+  return trimmed;
+}
+
 function parseJson<T>(stdout: string): T {
   const trimmed = stdout.trim();
   if (!trimmed) {
@@ -219,4 +265,15 @@ function redactArgs(args: string[], values: string[]): string[] {
     return args;
   }
   return args.map(arg => (values.includes(arg) ? "********" : arg));
+}
+
+function exampleCommand(executable: string, args: string[]): string {
+  return [executable, ...args].map(exampleArg).join(" ");
+}
+
+function exampleArg(value: string): string {
+  if (/^<[^>\s]+>$/.test(value)) {
+    return value;
+  }
+  return shellQuote(value);
 }

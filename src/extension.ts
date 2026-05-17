@@ -28,6 +28,19 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerTreeDataProvider("argocdContexts", contexts)
   );
 
+  const applicationsAutoRefresh = createApplicationsAutoRefresh(applications);
+  context.subscriptions.push(
+    applicationsAutoRefresh,
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (
+        event.affectsConfiguration("argocd.applicationsAutoRefresh") ||
+        event.affectsConfiguration("argocd.applicationsAutoRefreshIntervalSeconds")
+      ) {
+        applicationsAutoRefresh.reconfigure();
+      }
+    })
+  );
+
   registerCommands(context, cli, {
     applications,
     projects,
@@ -38,3 +51,37 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {}
+
+interface ReconfigurableDisposable extends vscode.Disposable {
+  reconfigure(): void;
+}
+
+function createApplicationsAutoRefresh(applications: ApplicationsProvider): ReconfigurableDisposable {
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const stop = () => {
+    if (timer) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  };
+
+  const reconfigure = () => {
+    stop();
+
+    const config = vscode.workspace.getConfiguration("argocd");
+    if (!config.get<boolean>("applicationsAutoRefresh", true)) {
+      return;
+    }
+
+    const seconds = Math.max(5, config.get<number>("applicationsAutoRefreshIntervalSeconds", 30));
+    timer = setInterval(() => applications.refresh(), seconds * 1000);
+  };
+
+  reconfigure();
+
+  return {
+    reconfigure,
+    dispose: stop
+  };
+}

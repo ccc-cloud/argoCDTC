@@ -24,6 +24,7 @@ export function registerCommands(
 ): void {
   const allProviders = Object.values(providers);
   const refreshAll = () => allProviders.forEach(provider => provider.refresh());
+  const refreshApplications = () => providers.applications.refresh();
 
   const register = (id: string, callback: (...args: unknown[]) => unknown) => {
     context.subscriptions.push(vscode.commands.registerCommand(id, callback));
@@ -43,7 +44,7 @@ export function registerCommands(
 
   register("argocd.app.create", () => createApplication(cli, refreshAll));
   register("argocd.app.get", target => applicationDetails(cli, target));
-  register("argocd.app.sync", target => syncApplication(cli, target, refreshAll));
+  register("argocd.app.sync", target => syncApplication(cli, target, refreshApplications));
   register("argocd.app.refresh", target => refreshApplication(cli, target, refreshAll, false));
   register("argocd.app.hardRefresh", target => refreshApplication(cli, target, refreshAll, true));
   register("argocd.app.diff", target => appText(cli, "Application Diff", target, ["app", "diff"], true));
@@ -72,7 +73,7 @@ export function registerCommands(
 }
 
 async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
-  const server = await vscode.window.showInputBox({
+  const server = await showInputBox({
     title: "Argo CD Login",
     prompt: "Argo CD server",
     value: cli.server,
@@ -82,7 +83,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
     return;
   }
 
-  const method = await vscode.window.showQuickPick(
+  const method = await showQuickPick(
     [
       { label: "Username and password", value: "password" },
       { label: "SSO", value: "sso" },
@@ -104,7 +105,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
     return;
   }
 
-  const username = await vscode.window.showInputBox({
+  const username = await showInputBox({
     title: "Argo CD Login",
     prompt: "Username",
     value: "admin"
@@ -113,7 +114,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
     return;
   }
 
-  const password = await vscode.window.showInputBox({
+  const password = await showInputBox({
     title: "Argo CD Login",
     prompt: "Password",
     password: true
@@ -130,7 +131,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
 }
 
 async function logout(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
-  const server = await vscode.window.showInputBox({
+  const server = await showInputBox({
     title: "Argo CD Logout",
     prompt: "Server to log out from",
     value: cli.server
@@ -147,7 +148,7 @@ async function logout(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
 }
 
 async function openUi(cli: ArgoCdCli): Promise<void> {
-  const server = await vscode.window.showInputBox({
+  const server = await showInputBox({
     title: "Open Argo CD UI",
     prompt: "Argo CD server URL",
     value: cli.server,
@@ -160,7 +161,7 @@ async function openUi(cli: ArgoCdCli): Promise<void> {
 }
 
 async function runCatalogCommand(cli: ArgoCdCli): Promise<void> {
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     catalogCommands.map(command => ({
       label: command.label,
       description: command.description,
@@ -177,7 +178,7 @@ async function runCatalogCommand(cli: ArgoCdCli): Promise<void> {
     return;
   }
 
-  const extra = await vscode.window.showInputBox({
+  const extra = await showInputBox({
     title: picked.label,
     prompt: "Arguments to append",
     placeHolder: "guestbook --prune --timeout 120"
@@ -187,7 +188,7 @@ async function runCatalogCommand(cli: ArgoCdCli): Promise<void> {
 }
 
 async function runArbitraryCli(cli: ArgoCdCli): Promise<void> {
-  const input = await vscode.window.showInputBox({
+  const input = await showInputBox({
     title: "Run Any Argo CD CLI Command",
     prompt: "Arguments after argocd",
     placeHolder: "app sync guestbook --prune"
@@ -207,7 +208,7 @@ async function createApplication(cli: ArgoCdCli, refreshAll: () => void): Promis
   if (!repo) {
     return;
   }
-  const path = await vscode.window.showInputBox({
+  const path = await showInputBox({
     title: "Create Application",
     prompt: "Repository path or Helm chart name",
     value: "guestbook"
@@ -215,7 +216,7 @@ async function createApplication(cli: ArgoCdCli, refreshAll: () => void): Promis
   if (!path) {
     return;
   }
-  const destination = await vscode.window.showInputBox({
+  const destination = await showInputBox({
     title: "Create Application",
     prompt: "Destination server or cluster name",
     value: "https://kubernetes.default.svc"
@@ -223,7 +224,7 @@ async function createApplication(cli: ArgoCdCli, refreshAll: () => void): Promis
   if (!destination) {
     return;
   }
-  const namespace = await vscode.window.showInputBox({
+  const namespace = await showInputBox({
     title: "Create Application",
     prompt: "Destination namespace",
     value: "default"
@@ -231,7 +232,7 @@ async function createApplication(cli: ArgoCdCli, refreshAll: () => void): Promis
   if (!namespace) {
     return;
   }
-  const project = await vscode.window.showInputBox({
+  const project = await showInputBox({
     title: "Create Application",
     prompt: "Project",
     value: "default"
@@ -272,12 +273,12 @@ async function applicationDetails(cli: ArgoCdCli, target: unknown): Promise<void
   });
 }
 
-async function syncApplication(cli: ArgoCdCli, target: unknown, refreshAll: () => void): Promise<void> {
+async function syncApplication(cli: ArgoCdCli, target: unknown, refreshApplications: () => void): Promise<void> {
   const name = await selectApplication(cli, target);
   if (!name) {
     return;
   }
-  const mode = await vscode.window.showQuickPick(
+  const mode = await showQuickPick(
     [
       { label: "Sync", args: [] },
       { label: "Sync and prune", args: ["--prune"] },
@@ -294,8 +295,13 @@ async function syncApplication(cli: ArgoCdCli, target: unknown, refreshAll: () =
   if (!confirmed) {
     return;
   }
-  cli.terminal(["app", "sync", name, ...mode.args], `Sync ${name}`);
-  refreshAll();
+  cli.output.show(true);
+  await withProgress(cli, `Syncing ${name}`, async () => {
+    await withLiveRefresh(refreshApplications, async () => {
+      await cli.run(["app", "sync", name, ...mode.args], { streamOutput: true });
+      vscode.window.showInformationMessage(`Sync completed for ${name}`);
+    });
+  });
 }
 
 async function refreshApplication(cli: ArgoCdCli, target: unknown, refreshAll: () => void, hard: boolean): Promise<void> {
@@ -340,7 +346,7 @@ async function waitApplication(cli: ArgoCdCli, target: unknown): Promise<void> {
   if (!name) {
     return;
   }
-  const mode = await vscode.window.showQuickPick(
+  const mode = await showQuickPick(
     [
       { label: "Healthy and synced", args: ["--health", "--sync"] },
       { label: "Healthy", args: ["--health"] },
@@ -394,7 +400,7 @@ async function deleteApplication(cli: ArgoCdCli, target: unknown, refreshAll: ()
   if (!name) {
     return;
   }
-  const cascade = await vscode.window.showQuickPick(
+  const cascade = await showQuickPick(
     [
       { label: "Cascade delete managed resources", args: ["--cascade"] },
       { label: "Delete application only", args: ["--cascade=false"] }
@@ -419,7 +425,7 @@ async function createProject(cli: ArgoCdCli, refreshAll: () => void): Promise<vo
   if (!name) {
     return;
   }
-  const description = await vscode.window.showInputBox({
+  const description = await showInputBox({
     title: "Create Project",
     prompt: "Description",
     value: ""
@@ -465,7 +471,7 @@ async function addRepository(cli: ArgoCdCli, refreshAll: () => void): Promise<vo
   if (!repo) {
     return;
   }
-  const type = await vscode.window.showQuickPick(
+  const type = await showQuickPick(
     [
       { label: "Git", args: [] },
       { label: "Helm", args: ["--type", "helm"] },
@@ -476,7 +482,7 @@ async function addRepository(cli: ArgoCdCli, refreshAll: () => void): Promise<vo
   if (!type) {
     return;
   }
-  const extra = await vscode.window.showInputBox({
+  const extra = await showInputBox({
     title: "Add Repository",
     prompt: "Extra CLI arguments",
     placeHolder: "--username USER --ssh-private-key-path ~/.ssh/id_rsa"
@@ -515,7 +521,7 @@ async function addCluster(cli: ArgoCdCli, refreshAll: () => void): Promise<void>
   if (!kubeContext) {
     return;
   }
-  const extra = await vscode.window.showInputBox({
+  const extra = await showInputBox({
     title: "Add Cluster",
     prompt: "Extra CLI arguments",
     placeHolder: "--name dev --namespace default"
@@ -567,7 +573,7 @@ async function selectApplication(cli: ArgoCdCli, target: unknown): Promise<strin
     return direct;
   }
   const apps = await cli.listApplications();
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     apps.map(app => ({
       label: applicationName(app),
       description: [app.status?.sync?.status, app.status?.health?.status].filter(Boolean).join(" / "),
@@ -585,7 +591,7 @@ async function selectProject(cli: ArgoCdCli, target: unknown): Promise<string | 
     return direct;
   }
   const projects = await cli.listProjects();
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     projects.map(project => ({
       label: projectName(project),
       description: project.description
@@ -601,7 +607,7 @@ async function selectRepository(cli: ArgoCdCli, target: unknown): Promise<string
     return direct;
   }
   const repos = await cli.listRepositories();
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     repos.map(repo => ({
       label: repositoryName(repo),
       description: [repo.type, repo.project].filter(Boolean).join(" / ")
@@ -617,7 +623,7 @@ async function selectCluster(cli: ArgoCdCli, target: unknown): Promise<string | 
     return direct;
   }
   const clusters = await cli.listClusters();
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     clusters.map(cluster => ({
       label: clusterName(cluster),
       description: cluster.connectionState?.status,
@@ -634,7 +640,7 @@ async function selectContext(cli: ArgoCdCli, target: unknown): Promise<string | 
     return direct;
   }
   const contexts = await cli.listContexts();
-  const picked = await vscode.window.showQuickPick(
+  const picked = await showQuickPick(
     contexts.map(context => ({
       label: context.name,
       description: context.current ? "current" : context.server,
@@ -675,12 +681,34 @@ async function withProgress<T>(cli: ArgoCdCli, title: string, task: () => Promis
   }
 }
 
+async function withLiveRefresh<T>(refresh: () => void, task: () => Promise<T>): Promise<T> {
+  refresh();
+  const timer = setInterval(refresh, 3000);
+  try {
+    return await task();
+  } finally {
+    clearInterval(timer);
+    refresh();
+  }
+}
+
 async function confirm(message: string, action: string): Promise<boolean> {
   return (await vscode.window.showWarningMessage(message, { modal: true }, action)) === action;
 }
 
+async function showInputBox(options: vscode.InputBoxOptions): Promise<string | undefined> {
+  return await vscode.window.showInputBox({ ignoreFocusOut: true, ...options });
+}
+
+async function showQuickPick<T extends vscode.QuickPickItem>(
+  items: readonly T[],
+  options: vscode.QuickPickOptions = {}
+): Promise<T | undefined> {
+  return await vscode.window.showQuickPick(items, { ignoreFocusOut: true, ...options });
+}
+
 async function inputRequired(title: string, prompt: string, value = ""): Promise<string | undefined> {
-  return await vscode.window.showInputBox({
+  return await showInputBox({
     title,
     prompt,
     value,
