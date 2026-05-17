@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Added a plus action to log in and create a new named context from the Contexts view.
+- Added safe local context removal from the Contexts view without deleting shared server entries still used by other contexts.
+- Fixed TypeScript types for setInterval and clearInterval by explicitly declaring Node.js types in tsconfig.json.
+
 ## 0.1.1
 
 - Added Argo CD CLI download instructions and session troubleshooting notes to the README.

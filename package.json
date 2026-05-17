@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {
@@ -63,7 +63,9 @@
     "onCommand:argocd.cluster.add",
     "onCommand:argocd.cluster.get",
     "onCommand:argocd.cluster.remove",
-    "onCommand:argocd.context.use"
+    "onCommand:argocd.context.add",
+    "onCommand:argocd.context.use",
+    "onCommand:argocd.context.remove"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -326,9 +328,19 @@
         "title": "Argo CD Cluster: Remove"
       },
       {
+        "command": "argocd.context.add",
+        "title": "Argo CD Context: Add",
+        "icon": "$(add)"
+      },
+      {
         "command": "argocd.context.use",
         "title": "Argo CD Context: Use",
         "icon": "$(check)"
+      },
+      {
+        "command": "argocd.context.remove",
+        "title": "Argo CD Context: Remove",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -341,6 +353,11 @@
         {
           "command": "argocd.app.create",
           "when": "view == argocdApplications",
+          "group": "navigation@2"
+        },
+        {
+          "command": "argocd.context.add",
+          "when": "view == argocdContexts",
           "group": "navigation@2"
         }
       ],
@@ -444,6 +461,16 @@
           "command": "argocd.context.use",
           "when": "view == argocdContexts && viewItem == argocdContext",
           "group": "inline@1"
+        },
+        {
+          "command": "argocd.context.remove",
+          "when": "view == argocdContexts && viewItem == argocdContext",
+          "group": "inline@2"
+        },
+        {
+          "command": "argocd.context.remove",
+          "when": "view == argocdContexts && viewItem == argocdContextCurrent",
+          "group": "inline@1"
         }
       ],
       "commandPalette": [
@@ -479,5 +506,8 @@
         "path": "./snippets/argocd.code-snippets"
       }
     ]
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }

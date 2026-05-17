@@ -12,7 +12,7 @@ The extension intentionally uses the official `argocd` CLI as its execution laye
 - Project operations: create, details, and delete.
 - Repository operations: add, details, and remove.
 - Cluster operations: add, details, and remove.
-- Context switching from the Contexts view.
+- Context switching, new-context login, and context removal from the Contexts view.
 - Command catalog for the rest of Argo CD, including accounts, certificates, GPG keys, repository credentials, sync windows, admin export/import, and shell completion.
 - Escape hatch command: `Argo CD: Run Any CLI Command`.
 - YAML snippets for `Application`, multi-source `Application`, `AppProject`, and `ApplicationSet`.

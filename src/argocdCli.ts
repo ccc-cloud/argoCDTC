@@ -9,6 +9,7 @@ import {
   ArgoRepository,
   asArray
 } from "./models";
+import { listLocalContexts, removeLocalContext } from "./localConfig";
 import { commandLine, runInTerminal, shellQuote } from "./terminal";
 
 export interface CliResult {
@@ -186,8 +187,11 @@ export class ArgoCdCli {
   }
 
   async listContexts(): Promise<ArgoContext[]> {
-    const result = await this.run(["context"], { includeGlobalArgs: false });
-    return parseContexts(result.stdout);
+    return await listLocalContexts();
+  }
+
+  async removeContext(name: string): Promise<void> {
+    await removeLocalContext(name);
   }
 
   private config(): vscode.WorkspaceConfiguration {
@@ -238,26 +242,6 @@ function parseJson<T>(stdout: string): T {
     throw new Error("Argo CD returned no JSON output.");
   }
   return JSON.parse(trimmed) as T;
-}
-
-function parseContexts(stdout: string): ArgoContext[] {
-  return stdout
-    .split(/\r?\n/)
-    .map(line => line.trimEnd())
-    .filter(line => line.trim() && !/^CURRENT\s+/.test(line.trim()))
-    .map(line => {
-      const current = line.trimStart().startsWith("*");
-      const clean = line.replace(/^\s*\*\s*/, "").trim();
-      const parts = clean.split(/\s+/);
-      return {
-        name: parts[0] ?? clean,
-        server: parts[1],
-        user: parts[2],
-        current,
-        raw: line
-      };
-    })
-    .filter(context => context.name);
 }
 
 function redactArgs(args: string[], values: string[]): string[] {

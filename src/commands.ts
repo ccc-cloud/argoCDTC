@@ -69,12 +69,20 @@ export function registerCommands(
   register("argocd.cluster.get", target => clusterDetails(cli, target));
   register("argocd.cluster.remove", target => removeCluster(cli, target, refreshAll));
 
+  register("argocd.context.add", () => addContext(cli, refreshAll));
   register("argocd.context.use", target => useContext(cli, target, refreshAll));
+  register("argocd.context.remove", target => removeContext(cli, target, refreshAll));
 }
 
-async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
+interface LoginOptions {
+  title?: string;
+  promptContextName?: boolean;
+}
+
+async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptions = {}): Promise<void> {
+  const title = options.title ?? "Argo CD Login";
   const server = await showInputBox({
-    title: "Argo CD Login",
+    title,
     prompt: "Argo CD server",
     value: cli.server,
     placeHolder: "argocd.example.com"
@@ -82,6 +90,20 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
   if (!server) {
     return;
   }
+
+  let contextName = "";
+  if (options.promptContextName) {
+    const input = await showInputBox({
+      title,
+      prompt: "Context name",
+      placeHolder: "Defaults to the server name"
+    });
+    if (input === undefined) {
+      return;
+    }
+    contextName = input.trim();
+  }
+  const contextArgs = contextName ? ["--name", contextName] : [];
 
   const method = await showQuickPick(
     [
@@ -96,17 +118,17 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
   }
 
   if (method.value === "sso") {
-    cli.terminal(["login", server, "--sso"], "Argo CD Login");
+    cli.terminal(["login", server, ...contextArgs, "--sso"], title);
     return;
   }
 
   if (method.value === "core") {
-    cli.terminal(["login", "--core"], "Argo CD Login", false);
+    cli.terminal(["login", ...contextArgs, "--core"], title, false);
     return;
   }
 
   const username = await showInputBox({
-    title: "Argo CD Login",
+    title,
     prompt: "Username",
     value: "admin"
   });
@@ -115,7 +137,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
   }
 
   const password = await showInputBox({
-    title: "Argo CD Login",
+    title,
     prompt: "Password",
     password: true
   });
@@ -124,9 +146,16 @@ async function login(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
   }
 
   await withProgress(cli, "Logging in to Argo CD", async () => {
-    await cli.run(["login", server, "--username", username, "--password", password], { redact: [password] });
-    vscode.window.showInformationMessage(`Logged in to ${server}`);
+    await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password] });
+    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
     refreshAll();
+  });
+}
+
+async function addContext(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
+  await login(cli, refreshAll, {
+    title: "Add Argo CD Context",
+    promptContextName: true
   });
 }
 
@@ -563,6 +592,21 @@ async function useContext(cli: ArgoCdCli, target: unknown, refreshAll: () => voi
   await withProgress(cli, `Switching to context ${name}`, async () => {
     await cli.run(["context", name], { includeGlobalArgs: false });
     vscode.window.showInformationMessage(`Using Argo CD context ${name}`);
+    refreshAll();
+  });
+}
+
+async function removeContext(cli: ArgoCdCli, target: unknown, refreshAll: () => void): Promise<void> {
+  const name = await selectContext(cli, target);
+  if (!name) {
+    return;
+  }
+  if (!(await confirm(`Remove Argo CD context ${name}?`, "Remove"))) {
+    return;
+  }
+  await withProgress(cli, `Removing context ${name}`, async () => {
+    await cli.removeContext(name);
+    vscode.window.showInformationMessage(`Removed Argo CD context ${name}`);
     refreshAll();
   });
 }
