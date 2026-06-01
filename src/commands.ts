@@ -4,6 +4,7 @@ import { catalogCommands } from "./catalog";
 import { showJsonDocument, showTextDocument } from "./documents";
 import {
   ArgoApplication,
+  ArgoApplicationParameter,
   ArgoCluster,
   ArgoContext,
   ArgoProject,
@@ -45,6 +46,8 @@ export function registerCommands(
   register("argocd.app.create", () => createApplication(cli, refreshAll));
   register("argocd.app.get", target => applicationDetails(cli, target));
   register("argocd.app.sync", target => syncApplication(cli, target, refreshApplications));
+  register("argocd.app.syncOutOfSync", () => syncOutOfSyncApplications(cli, refreshApplications));
+  register("argocd.app.setParameters", target => updateApplicationParameters(cli, target, refreshApplications));
   register("argocd.app.refresh", target => refreshApplication(cli, target, refreshAll, false));
   register("argocd.app.hardRefresh", target => refreshApplication(cli, target, refreshAll, true));
   register("argocd.app.diff", target => appText(cli, "Application Diff", target, ["app", "diff"], true));
@@ -307,16 +310,7 @@ async function syncApplication(cli: ArgoCdCli, target: unknown, refreshApplicati
   if (!name) {
     return;
   }
-  const mode = await showQuickPick(
-    [
-      { label: "Sync", args: [] },
-      { label: "Sync and prune", args: ["--prune"] },
-      { label: "Dry run", args: ["--dry-run"] },
-      { label: "Force", args: ["--force"] },
-      { label: "Server-side apply", args: ["--server-side"] }
-    ],
-    { title: `Sync ${name}` }
-  );
+  const mode = await showQuickPick(syncModeOptions(), { title: `Sync ${name}` });
   if (!mode) {
     return;
   }
@@ -330,6 +324,88 @@ async function syncApplication(cli: ArgoCdCli, target: unknown, refreshApplicati
       await cli.run(["app", "sync", name, ...mode.args], { streamOutput: true });
       vscode.window.showInformationMessage(`Sync completed for ${name}`);
     });
+  });
+}
+
+async function syncOutOfSyncApplications(cli: ArgoCdCli, refreshApplications: () => void): Promise<void> {
+  const apps = await withProgress(cli, "Loading OutOfSync applications", async () => await cli.listApplications());
+  if (!apps) {
+    return;
+  }
+
+  const outOfSyncApps = apps.filter(app => app.status?.sync?.status === "OutOfSync");
+  if (outOfSyncApps.length === 0) {
+    vscode.window.showInformationMessage("No OutOfSync Argo CD applications found.");
+    return;
+  }
+
+  const picked = await showQuickPickMany(
+    outOfSyncApps.map(app => ({
+      label: applicationName(app),
+      description: [app.status?.sync?.status, app.status?.health?.status].filter(Boolean).join(" / "),
+      detail: app.spec?.source?.repoURL ?? app.spec?.sources?.map(source => source.repoURL).filter(Boolean).join(", "),
+      app
+    })),
+    {
+      title: "Select OutOfSync applications to sync",
+      matchOnDescription: true,
+      matchOnDetail: true
+    }
+  );
+  if (!picked || picked.length === 0) {
+    return;
+  }
+
+  const selectedApps = picked.map(item => item.app);
+  const mode = await showQuickPick(syncModeOptions(), { title: `Sync ${selectedApps.length} application${selectedApps.length === 1 ? "" : "s"}` });
+  if (!mode) {
+    return;
+  }
+
+  const names = selectedApps.map(applicationName);
+  const confirmed = await confirm(`Sync ${names.length} OutOfSync application${names.length === 1 ? "" : "s"}?`, "Sync");
+  if (!confirmed) {
+    return;
+  }
+
+  cli.output.show(true);
+  await withProgress(cli, `Syncing ${names.length} application${names.length === 1 ? "" : "s"}`, async () => {
+    await withLiveRefresh(refreshApplications, async () => {
+      await cli.run(["app", "sync", ...names, ...mode.args], { streamOutput: true });
+      vscode.window.showInformationMessage(`Sync completed for ${names.length} application${names.length === 1 ? "" : "s"}.`);
+    });
+  });
+}
+
+async function updateApplicationParameters(cli: ArgoCdCli, target: unknown, refreshApplications: () => void): Promise<void> {
+  const name = await selectApplication(cli, target);
+  if (!name) {
+    return;
+  }
+
+  const app = await withProgress(cli, `Loading parameters for ${name}`, async () => await cli.getApplication(name));
+  if (!app) {
+    return;
+  }
+
+  const existingParameters = existingApplicationParameters(app);
+  const originalValues = new Map(existingParameters.map(parameter => [parameter.name, parameter.value]));
+  const values = new Map(originalValues);
+  const parameters = await collectParameterUpdates(name, originalValues, values);
+  if (parameters.length === 0) {
+    return;
+  }
+
+  const confirmed = await confirm(`Update ${parameters.length} parameter${parameters.length === 1 ? "" : "s"} on ${name}?\n${parameterSummary(parameters)}`, "Update");
+  if (!confirmed) {
+    return;
+  }
+
+  await withProgress(cli, `Updating parameters for ${name}`, async () => {
+    const parameterArgs = parameters.flatMap(parameter => ["--parameter", `${parameter.name}=${parameter.value}`]);
+    await cli.run(["app", "set", name, ...parameterArgs]);
+    vscode.window.showInformationMessage(`Updated ${parameters.length} parameter${parameters.length === 1 ? "" : "s"} for ${name}.`);
+    refreshApplications();
   });
 }
 
@@ -727,12 +803,13 @@ async function withProgress<T>(cli: ArgoCdCli, title: string, task: () => Promis
 
 async function withLiveRefresh<T>(refresh: () => void, task: () => Promise<T>): Promise<T> {
   refresh();
-  const timer = setInterval(refresh, 3000);
+  const timer = setInterval(refresh, 1000);
   try {
     return await task();
   } finally {
     clearInterval(timer);
     refresh();
+    schedulePostSyncRefreshes(refresh);
   }
 }
 
@@ -751,6 +828,13 @@ async function showQuickPick<T extends vscode.QuickPickItem>(
   return await vscode.window.showQuickPick(items, { ignoreFocusOut: true, ...options });
 }
 
+async function showQuickPickMany<T extends vscode.QuickPickItem>(
+  items: readonly T[],
+  options: vscode.QuickPickOptions = {}
+): Promise<T[] | undefined> {
+  return await vscode.window.showQuickPick(items, { ignoreFocusOut: true, ...options, canPickMany: true });
+}
+
 async function inputRequired(title: string, prompt: string, value = ""): Promise<string | undefined> {
   return await showInputBox({
     title,
@@ -758,6 +842,288 @@ async function inputRequired(title: string, prompt: string, value = ""): Promise
     value,
     validateInput: input => input.trim() ? undefined : `${prompt} is required`
   });
+}
+
+interface SyncMode extends vscode.QuickPickItem {
+  args: string[];
+}
+
+function syncModeOptions(): SyncMode[] {
+  return [
+    { label: "Sync", args: [] },
+    { label: "Sync and prune", args: ["--prune"] },
+    { label: "Dry run", args: ["--dry-run"] },
+    { label: "Force", args: ["--force"] },
+    { label: "Server-side apply", args: ["--server-side"] }
+  ];
+}
+
+interface ParameterUpdate {
+  name: string;
+  value: string;
+}
+
+type ParameterPick =
+  | (vscode.QuickPickItem & { action: "apply" | "add" | "bulk" })
+  | (vscode.QuickPickItem & { action: "edit"; name: string });
+
+async function collectParameterUpdates(
+  appName: string,
+  originalValues: Map<string, string>,
+  values: Map<string, string>
+): Promise<ParameterUpdate[]> {
+  while (true) {
+    const changes = changedParameters(originalValues, values);
+    const picked = await showQuickPick(parameterPickItems(originalValues, values, changes.length), {
+      title: `Update Parameters: ${appName}`,
+      placeHolder: changes.length > 0
+        ? "Search a parameter to edit, add one, or apply changes"
+        : "Search a parameter to edit or add one"
+    });
+
+    if (!picked) {
+      return [];
+    }
+
+    if (picked.action === "apply") {
+      if (changes.length === 0) {
+        vscode.window.showInformationMessage("No parameter changes to apply.");
+        continue;
+      }
+      return changes;
+    }
+
+    if (picked.action === "add") {
+      await addParameterValue(values);
+      continue;
+    }
+
+    if (picked.action === "bulk") {
+      await bulkUpdateParameterValues(values);
+      continue;
+    }
+
+    if (picked.action === "edit") {
+      await editParameterValue(picked.name, values);
+    }
+  }
+}
+
+function parameterPickItems(
+  originalValues: Map<string, string>,
+  values: Map<string, string>,
+  changeCount: number
+): ParameterPick[] {
+  const actionItems: ParameterPick[] = [
+    {
+      label: "$(check) Apply changes",
+      description: changeCount > 0 ? `${changeCount} pending` : "no pending changes",
+      action: "apply"
+    },
+    {
+      label: "$(add) Add parameter",
+      action: "add"
+    },
+    {
+      label: "$(list-unordered) Bulk paste parameters",
+      description: "name=value or JSON",
+      action: "bulk"
+    }
+  ];
+
+  const parameterItems = Array.from(values.entries()).map(([name, value]) => {
+    const originalValue = originalValues.get(name);
+    const changed = originalValue !== value;
+    return {
+      label: name,
+      description: value,
+      detail: changed
+        ? originalValues.has(name) ? `Edited, was: ${originalValue}` : "New parameter"
+        : "Current value",
+      action: "edit" as const,
+      name
+    };
+  });
+
+  return [
+    ...actionItems,
+    ...parameterItems
+  ];
+}
+
+async function addParameterValue(values: Map<string, string>): Promise<void> {
+  const name = await showInputBox({
+    title: "Add Parameter",
+    prompt: "Parameter name",
+    placeHolder: "backend.image.tag",
+    validateInput: input => input.trim() ? undefined : "Parameter name is required"
+  });
+  if (!name) {
+    return;
+  }
+
+  await editParameterValue(name.trim(), values);
+}
+
+async function editParameterValue(name: string, values: Map<string, string>): Promise<void> {
+  const value = await showInputBox({
+    title: `Update ${name}`,
+    prompt: "Parameter value",
+    value: values.get(name) ?? "",
+    placeHolder: "1.202-26"
+  });
+  if (value === undefined) {
+    return;
+  }
+  values.set(name, value);
+}
+
+async function bulkUpdateParameterValues(values: Map<string, string>): Promise<void> {
+  const input = await showInputBox({
+    title: "Bulk Paste Parameters",
+    prompt: "Paste name=value pairs or JSON with a parameters array",
+    placeHolder: "nameOverride=nexus, backend.image.tag=1.202-26, ui.image.tag=1.202-26",
+    value: parameterInputValue(mapToParameters(values)),
+    validateInput: value => parseParameterUpdates(value).error
+  });
+  if (input === undefined) {
+    return;
+  }
+
+  const parsed = parseParameterUpdates(input);
+  if (parsed.error) {
+    vscode.window.showErrorMessage(parsed.error);
+    return;
+  }
+
+  for (const parameter of parsed.parameters) {
+    values.set(parameter.name, parameter.value);
+  }
+}
+
+function changedParameters(originalValues: Map<string, string>, values: Map<string, string>): ParameterUpdate[] {
+  return Array.from(values.entries())
+    .filter(([name, value]) => originalValues.get(name) !== value)
+    .map(([name, value]) => ({ name, value }));
+}
+
+function existingApplicationParameters(app: ArgoApplication): ParameterUpdate[] {
+  const primaryParameters = normalizeApplicationParameters(app.spec?.source?.helm?.parameters);
+  if (primaryParameters.length > 0) {
+    return primaryParameters;
+  }
+
+  const sourceParameterGroups = app.spec?.sources
+    ?.map(source => normalizeApplicationParameters(source.helm?.parameters))
+    .filter(parameters => parameters.length > 0) ?? [];
+
+  return sourceParameterGroups.length === 1 ? sourceParameterGroups[0] : [];
+}
+
+function normalizeApplicationParameters(parameters: ArgoApplicationParameter[] | undefined): ParameterUpdate[] {
+  return parameters
+    ?.map(parameter => ({
+      name: parameter.name?.trim() ?? "",
+      value: parameter.value ?? ""
+    }))
+    .filter(parameter => parameter.name) ?? [];
+}
+
+function parameterInputValue(parameters: ParameterUpdate[]): string {
+  return parameters.map(parameter => `${parameter.name}=${parameter.value}`).join(", ");
+}
+
+function mapToParameters(values: Map<string, string>): ParameterUpdate[] {
+  return Array.from(values.entries()).map(([name, value]) => ({ name, value }));
+}
+
+function parseParameterUpdates(input: string): { parameters: ParameterUpdate[]; error?: undefined } | { parameters: ParameterUpdate[]; error: string } {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { parameters: [], error: "Enter at least one parameter." };
+  }
+
+  const jsonLike = toParameterJson(trimmed);
+  if (jsonLike) {
+    try {
+      const parsed = JSON.parse(jsonLike) as unknown;
+      const parameters = parametersFromJson(parsed);
+      return parameters.length > 0
+        ? { parameters }
+        : { parameters: [], error: "JSON must contain at least one parameter with name and value." };
+    } catch (error) {
+      return { parameters: [], error: error instanceof Error ? `Invalid JSON: ${error.message}` : "Invalid JSON." };
+    }
+  }
+
+  const parameters: ParameterUpdate[] = [];
+  for (const rawPart of trimmed.split(/[,\r\n]+/)) {
+    const part = rawPart.trim();
+    if (!part) {
+      continue;
+    }
+    const separator = part.indexOf("=");
+    if (separator < 1) {
+      return { parameters: [], error: `Use name=value syntax for "${part}".` };
+    }
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!name) {
+      return { parameters: [], error: "Parameter names cannot be empty." };
+    }
+    parameters.push({ name, value });
+  }
+
+  return parameters.length > 0
+    ? { parameters }
+    : { parameters: [], error: "Enter at least one parameter." };
+}
+
+function toParameterJson(input: string): string | undefined {
+  if (input.startsWith("[") || input.startsWith("{")) {
+    return input;
+  }
+  if (/^"parameters"\s*:/.test(input)) {
+    return `{${input}}`;
+  }
+  return undefined;
+}
+
+function parametersFromJson(value: unknown): ParameterUpdate[] {
+  const source = Array.isArray(value)
+    ? value
+    : value && typeof value === "object" && Array.isArray((value as { parameters?: unknown }).parameters)
+      ? (value as { parameters: unknown[] }).parameters
+      : [];
+
+  return source.map((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`Parameter ${index + 1} must be an object.`);
+    }
+    const record = item as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    if (!name) {
+      throw new Error(`Parameter ${index + 1} is missing a name.`);
+    }
+    if (!Object.prototype.hasOwnProperty.call(record, "value")) {
+      throw new Error(`Parameter ${index + 1} is missing a value.`);
+    }
+    return {
+      name,
+      value: String(record.value)
+    };
+  });
+}
+
+function parameterSummary(parameters: ParameterUpdate[]): string {
+  const summary = parameters.map(parameter => `${parameter.name}=${parameter.value}`).join(", ");
+  return summary.length <= 180 ? summary : `${summary.slice(0, 177)}...`;
+}
+
+function schedulePostSyncRefreshes(refresh: () => void): void {
+  for (const delayMs of [500, 1500, 3000, 5000, 10000]) {
+    setTimeout(refresh, delayMs);
+  }
 }
 
 function normalizeUrl(value: string): string {

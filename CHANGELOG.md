@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4
+
+- Added an application parameter update command with a searchable picker, per-parameter editing, bulk paste, and an inline application-row icon.
+- Added a bulk sync command with a selectable list of OutOfSync applications.
+- Refreshed the Applications view more aggressively during and after sync operations, and lowered the default auto-refresh interval.
+- Added `argocd.users.session.duration` to settings as a reference for the server-side `users.session.duration` value.
+
+## 0.1.3
+
+- Fixed extension activation failure caused by missing yaml dependency in VSIX by switching from plain tsc to esbuild bundling.
+
 ## 0.1.2
 
 - Added a plus action to log in and create a new named context from the Contexts view.

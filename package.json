@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {
@@ -43,6 +43,8 @@
     "onCommand:argocd.app.create",
     "onCommand:argocd.app.get",
     "onCommand:argocd.app.sync",
+    "onCommand:argocd.app.syncOutOfSync",
+    "onCommand:argocd.app.setParameters",
     "onCommand:argocd.app.refresh",
     "onCommand:argocd.app.hardRefresh",
     "onCommand:argocd.app.diff",
@@ -69,9 +71,9 @@
   ],
   "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "node esbuild.js --production",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
     "check": "tsc -p ./ --noEmit",
     "vsix": "vsce package",
     "publish:marketplace": "vsce publish"
@@ -79,6 +81,7 @@
   "devDependencies": {
     "@types/node": "^20.14.12",
     "@types/vscode": "^1.92.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.5.4"
   },
   "contributes": {
@@ -107,9 +110,14 @@
         },
         "argocd.applicationsAutoRefreshIntervalSeconds": {
           "type": "number",
-          "default": 30,
-          "minimum": 5,
+          "default": 15,
+          "minimum": 3,
           "description": "Seconds between automatic Applications view refreshes when argocd.applicationsAutoRefresh is enabled."
+        },
+        "argocd.users.session.duration": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Reference value for the Argo CD server-side `users.session.duration` key in `argocd-cm`, for example `168h`. This extension setting does not change server configuration automatically."
         },
         "argocd.core": {
           "type": "boolean",
@@ -242,6 +250,16 @@
         "icon": "$(sync)"
       },
       {
+        "command": "argocd.app.syncOutOfSync",
+        "title": "Argo CD Applications: Sync OutOfSync",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "argocd.app.setParameters",
+        "title": "Argo CD Application: Update Parameters",
+        "icon": "$(symbol-parameter)"
+      },
+      {
         "command": "argocd.app.refresh",
         "title": "Argo CD Application: Refresh",
         "icon": "$(refresh)"
@@ -356,6 +374,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "argocd.app.syncOutOfSync",
+          "when": "view == argocdApplications",
+          "group": "navigation@3"
+        },
+        {
           "command": "argocd.context.add",
           "when": "view == argocdContexts",
           "group": "navigation@2"
@@ -376,6 +399,11 @@
           "command": "argocd.app.refresh",
           "when": "view == argocdApplications && viewItem == argocdApp",
           "group": "inline@3"
+        },
+        {
+          "command": "argocd.app.setParameters",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "inline@4"
         },
         {
           "command": "argocd.app.hardRefresh",
@@ -491,6 +519,12 @@
         },
         {
           "command": "argocd.openUi"
+        },
+        {
+          "command": "argocd.app.syncOutOfSync"
+        },
+        {
+          "command": "argocd.app.setParameters"
         },
         {
           "command": "argocd.runCatalogCommand"

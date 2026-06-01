@@ -1,8 +1,9 @@
 .vscode/**
 .vscode-test/**
 src/**
-node_modules/**
 **/*.map
 tsconfig.json
 *.vsix
 .gitignore
+esbuild.js
+node_modules/**

@@ -74,7 +74,7 @@ function createApplicationsAutoRefresh(applications: ApplicationsProvider): Reco
       return;
     }
 
-    const seconds = Math.max(5, config.get<number>("applicationsAutoRefreshIntervalSeconds", 30));
+    const seconds = Math.max(3, config.get<number>("applicationsAutoRefreshIntervalSeconds", 15));
     timer = setInterval(() => applications.refresh(), seconds * 1000);
   };
 

@@ -8,7 +8,7 @@ The extension intentionally uses the official `argocd` CLI as its execution laye
 
 - Activity bar container with Applications, Projects, Clusters, Repositories, and Contexts views.
 - Login, logout, relogin, version, and open UI commands.
-- Application operations: create, details, sync, refresh, hard refresh, diff, logs, manifests, resources, history, wait, rollback, terminate operation, and delete.
+- Application operations: create, details, sync, sync OutOfSync apps in bulk, update parameters, refresh, hard refresh, diff, logs, manifests, resources, history, wait, rollback, terminate operation, and delete.
 - Project operations: create, details, and delete.
 - Repository operations: add, details, and remove.
 - Cluster operations: add, details, and remove.
@@ -54,6 +54,8 @@ An Argo CD admin can make sessions last longer by changing `users.session.durati
 data:
   users.session.duration: "168h"
 ```
+
+The VS Code setting `argocd.users.session.duration` is shown in this extension's settings as a reference for that server-side value. Argo CD only applies the duration after it is configured on the server.
 
 For automation or service-account style access, Argo CD account tokens can be generated with no expiration by default:
 
@@ -108,12 +110,35 @@ Then log in again and refresh.
   "argocd.defaultServer": "argocd.example.com",
   "argocd.defaultContext": "production",
   "argocd.applicationsAutoRefresh": true,
-  "argocd.applicationsAutoRefreshIntervalSeconds": 30,
+  "argocd.applicationsAutoRefreshIntervalSeconds": 15,
+  "argocd.users.session.duration": "168h",
   "argocd.insecure": false,
   "argocd.grpcWeb": false,
   "argocd.portForward": false,
   "argocd.portForwardNamespace": "argocd",
   "argocd.extraArgs": []
+}
+```
+
+## Application Parameter Updates
+
+Use `Argo CD Application: Update Parameters` from an application row icon, context menu, or the command palette. The command loads existing Helm parameters from the selected application and shows them in a searchable picker. Choose a parameter to edit just that value, add a new parameter, or apply the pending changes.
+
+The bulk paste action also accepts comma-separated `name=value` pairs:
+
+```text
+nameOverride=nexus, backend.image.tag=1.202-26, ui.image.tag=1.202-26
+```
+
+You can also paste JSON in the same shape Argo CD stores Helm parameters:
+
+```json
+{
+  "parameters": [
+    { "name": "nameOverride", "value": "nexus" },
+    { "name": "backend.image.tag", "value": "1.202-26" },
+    { "name": "ui.image.tag", "value": "1.202-26" }
+  ]
 }
 ```
 
@@ -128,4 +153,4 @@ Open this folder in VS Code and press `F5` to launch an Extension Development Ho
 
 ## Notes
 
-Some Argo CD operations are intentionally opened in an integrated terminal because the CLI may need to stream logs, show diff output, open SSO, ask Kubernetes registration questions, or display long-running progress. Application sync output is streamed to the Argo CD output channel so the Applications view can refresh while the sync is active.
+Some Argo CD operations are intentionally opened in an integrated terminal because the CLI may need to stream logs, show diff output, open SSO, ask Kubernetes registration questions, or display long-running progress. Application sync output is streamed to the Argo CD output channel so the Applications view can refresh while the sync is active and several times after sync completes.

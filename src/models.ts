@@ -9,20 +9,8 @@ export interface ArgoApplication {
   name?: string;
   spec?: {
     project?: string;
-    source?: {
-      repoURL?: string;
-      path?: string;
-      targetRevision?: string;
-      chart?: string;
-    };
-    sources?: Array<{
-      repoURL?: string;
-      path?: string;
-      targetRevision?: string;
-      chart?: string;
-      ref?: string;
-      name?: string;
-    }>;
+    source?: ArgoApplicationSource;
+    sources?: ArgoApplicationSource[];
     destination?: {
       server?: string;
       name?: string;
@@ -51,6 +39,24 @@ export interface ArgoApplication {
       externalURLs?: string[];
     };
   };
+}
+
+export interface ArgoApplicationSource {
+  repoURL?: string;
+  path?: string;
+  targetRevision?: string;
+  chart?: string;
+  ref?: string;
+  name?: string;
+  helm?: {
+    parameters?: ArgoApplicationParameter[];
+  };
+}
+
+export interface ArgoApplicationParameter {
+  name?: string;
+  value?: string;
+  forceString?: boolean;
 }
 
 export interface ArgoProject {
