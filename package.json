@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {
@@ -114,7 +114,7 @@
           "minimum": 3,
           "description": "Seconds between automatic Applications view refreshes when argocd.applicationsAutoRefresh is enabled."
         },
-        "argocd.users.session.duration": {
+        "argocd.usersSessionDuration": {
           "type": "string",
           "default": "",
           "markdownDescription": "Reference value for the Argo CD server-side `users.session.duration` key in `argocd-cm`, for example `168h`. This extension setting does not change server configuration automatically."

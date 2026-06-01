@@ -1,11 +1,15 @@
 # Changelog
 
+## 0.1.5
+
+- Renamed the VS Code setting to `argocd.usersSessionDuration` so it appears reliably in Settings while still documenting the server-side `users.session.duration` key.
+
 ## 0.1.4
 
 - Added an application parameter update command with a searchable picker, per-parameter editing, bulk paste, and an inline application-row icon.
 - Added a bulk sync command with a selectable list of OutOfSync applications.
 - Refreshed the Applications view more aggressively during and after sync operations, and lowered the default auto-refresh interval.
-- Added `argocd.users.session.duration` to settings as a reference for the server-side `users.session.duration` value.
+- Added a session-duration setting as a reference for the server-side `users.session.duration` value.
 
 ## 0.1.3
 

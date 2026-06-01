@@ -55,7 +55,7 @@ data:
   users.session.duration: "168h"
 ```
 
-The VS Code setting `argocd.users.session.duration` is shown in this extension's settings as a reference for that server-side value. Argo CD only applies the duration after it is configured on the server.
+The VS Code setting `argocd.usersSessionDuration` is shown in this extension's settings as a reference for that server-side value. Argo CD only applies the duration after it is configured on the server.
 
 For automation or service-account style access, Argo CD account tokens can be generated with no expiration by default:
 
@@ -111,7 +111,7 @@ Then log in again and refresh.
   "argocd.defaultContext": "production",
   "argocd.applicationsAutoRefresh": true,
   "argocd.applicationsAutoRefreshIntervalSeconds": 15,
-  "argocd.users.session.duration": "168h",
+  "argocd.usersSessionDuration": "168h",
   "argocd.insecure": false,
   "argocd.grpcWeb": false,
   "argocd.portForward": false,
