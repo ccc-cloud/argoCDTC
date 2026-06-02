@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Fixed `account generate-token` and `login` commands failing with "no configuration has been provided" when the `argocd.core` setting is enabled. The `--core` and `--kube-context` flags are now stripped from global args whenever an explicit server connection is requested.
+
 ## 0.1.8
 
 - Fixed token login and generate-token options not appearing in the Add/Edit Context flow due to a stale compiled bundle.

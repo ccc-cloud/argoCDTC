@@ -79,7 +79,13 @@ export class ArgoCdCli {
   }
 
   buildArgs(args: string[], options: RunOptions = {}): string[] {
-    const allArgs = options.includeGlobalArgs === false ? [...args] : [...this.globalArgs(), ...args];
+    let global = options.includeGlobalArgs === false ? [] : this.globalArgs();
+    // --core and --kube-context bypass the ArgoCD server API; strip them when
+    // an explicit server connection is requested via `login` or --server.
+    if (args[0] === "login" || args.includes("--server")) {
+      global = stripKubeModeArgs(global);
+    }
+    const allArgs = [...global, ...args];
     if (options.json && !allArgs.includes("-o") && !allArgs.includes("--output")) {
       allArgs.push("-o", "json");
     }
@@ -265,4 +271,19 @@ function exampleArg(value: string): string {
     return value;
   }
   return shellQuote(value);
+}
+
+function stripKubeModeArgs(args: string[]): string[] {
+  const result: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--core") {
+      continue;
+    }
+    if (args[i] === "--kube-context") {
+      i++; // skip flag and its value
+      continue;
+    }
+    result.push(args[i]);
+  }
+  return result;
 }
