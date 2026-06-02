@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.18
+
+- Token login and "Generate token" token storage no longer call `argocd login --auth-token`, which was hanging because it tries to validate the token against the server via gRPC. The token is now written directly to the local ArgoCD config file — same result, no network call required.
+
+## 0.1.17
+
+- Login commands now time out after 20 seconds instead of hanging indefinitely. On timeout, an error is shown explaining that gRPC-Web may be required, and the one-click **Enable gRPC-Web** button appears.
+
+## 0.1.16
+
+- Token login now shows "Connecting to server…" and "Switching to context…" steps so it's clear what is happening during the operation.
+- After token login, the extension verifies the context was actually created. If the login appeared to succeed but no context was written (e.g. due to a gRPC-Web mismatch), a clear error is shown with instructions to enable gRPC-Web — which also surfaces the one-click **Enable gRPC-Web** button.
+
+## 0.1.15
+
+- "Generate token" flow now shows step-by-step progress: "Logging in with credentials…", "Generating API token…", "Storing token…".
+- Success notification now explicitly confirms the token was stored: `Context "X" added with a 30-day API token.`
+- Context list refreshes before the success notification so the new context is visible immediately.
+
 ## 0.1.14
 
 - When an operation fails because the server requires gRPC-Web, a notification now offers an **Enable gRPC-Web** button that sets `argocd.grpcWeb: true` automatically. No more digging through VS Code settings.

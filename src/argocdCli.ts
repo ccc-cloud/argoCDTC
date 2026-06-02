@@ -9,7 +9,7 @@ import {
   ArgoRepository,
   asArray
 } from "./models";
-import { editLocalContext, listLocalContexts, LocalContextUpdate, removeLocalContext } from "./localConfig";
+import { addOrUpdateLocalContext, editLocalContext, listLocalContexts, LocalContextUpdate, removeLocalContext } from "./localConfig";
 import { commandLine, runInTerminal, shellQuote } from "./terminal";
 
 export interface CliResult {
@@ -26,6 +26,7 @@ export interface RunOptions {
   streamOutput?: boolean;
   suppressOutput?: boolean;
   cancellationToken?: vscode.CancellationToken;
+  timeoutMs?: number;
 }
 
 export class ArgoCdCli {
@@ -123,6 +124,17 @@ export class ArgoCdCli {
         reject(new vscode.CancellationError());
       });
 
+      if (options.timeoutMs) {
+        const timer = setTimeout(() => {
+          child.kill();
+          reject(new Error(
+            `The command timed out after ${Math.round(options.timeoutMs! / 1000)}s. ` +
+            `If this Argo CD server requires gRPC-Web, enable "argocd.grpcWeb": true in VS Code settings and retry.`
+          ));
+        }, options.timeoutMs);
+        child.on("close", () => clearTimeout(timer));
+      }
+
       let stdout = "";
       let stderr = "";
 
@@ -214,6 +226,10 @@ export class ArgoCdCli {
 
   async editContext(name: string, update: LocalContextUpdate): Promise<void> {
     await editLocalContext(name, update);
+  }
+
+  async saveContext(contextName: string, server: string, authToken: string): Promise<void> {
+    await addOrUpdateLocalContext(contextName, server, authToken);
   }
 
   private config(): vscode.WorkspaceConfiguration {

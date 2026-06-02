@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.14",
+  "version": "0.1.18",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {

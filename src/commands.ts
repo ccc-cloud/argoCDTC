@@ -165,7 +165,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
   }
 
   await withProgress(cli, "Logging in to Argo CD", async (cancel) => {
-    await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password], cancellationToken: cancel });
+    await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password], cancellationToken: cancel, timeoutMs: 20000 });
     if (contextName) {
       await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
     }
@@ -191,13 +191,11 @@ async function loginWithToken(
     return;
   }
 
-  await withProgress(cli, "Logging in to Argo CD with token", async (cancel) => {
-    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token], cancellationToken: cancel });
-    if (contextName) {
-      await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
-    }
-    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
+  await withProgress(cli, "Logging in to Argo CD with token", async (_cancel, report) => {
+    report("Saving context…");
+    await cli.saveContext(contextName || server, server, token);
     refreshAll();
+    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
   });
 }
 
@@ -253,14 +251,14 @@ async function generateTokenAndLogin(
   const expiresIn = `${days}d`;
   const accountArgs = account.trim() ? ["--account", account.trim()] : [];
 
-  await withProgress(cli, `Generating ${days}-day Argo CD token`, async (cancel) => {
-    // Login with username/password to establish an authenticated session
+  await withProgress(cli, `Generating ${days}-day Argo CD token`, async (cancel, report) => {
+    report("Logging in with credentials…");
     await cli.run(
       ["login", server, ...contextArgs, "--username", username, "--password", password],
-      { redact: [password], cancellationToken: cancel }
+      { redact: [password], cancellationToken: cancel, timeoutMs: 20000 }
     );
 
-    // Generate the API token using that session (no --server needed; uses current context)
+    report("Generating API token…");
     const result = await cli.run(
       ["account", "generate-token", ...accountArgs, "--expires-in", expiresIn],
       { suppressOutput: true, cancellationToken: cancel }
@@ -270,16 +268,14 @@ async function generateTokenAndLogin(
       throw new Error("Argo CD did not return a token.");
     }
 
-    // Replace the session credential with the long-lived token
-    await cli.run(
-      ["login", server, ...contextArgs, "--auth-token", authToken],
-      { redact: [authToken], cancellationToken: cancel }
-    );
-    if (contextName) {
-      await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
-    }
-    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
+    report("Storing token…");
+    await cli.saveContext(contextName || server, server, authToken);
     refreshAll();
+    vscode.window.showInformationMessage(
+      contextName
+        ? `Context "${contextName}" added with a ${days}-day API token.`
+        : `Logged in to ${server} with a ${days}-day API token.`
+    );
   });
 }
 
@@ -990,11 +986,15 @@ async function runText(cli: ArgoCdCli, title: string, args: string[]): Promise<v
   });
 }
 
-async function withProgress<T>(cli: ArgoCdCli, title: string, task: (token: vscode.CancellationToken) => Promise<T>): Promise<T | undefined> {
+async function withProgress<T>(
+  cli: ArgoCdCli,
+  title: string,
+  task: (token: vscode.CancellationToken, report: (message: string) => void) => Promise<T>
+): Promise<T | undefined> {
   try {
     return await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title, cancellable: true },
-      (_progress, token) => task(token)
+      (progress, token) => task(token, message => progress.report({ message }))
     );
   } catch (error) {
     if (error instanceof vscode.CancellationError) {

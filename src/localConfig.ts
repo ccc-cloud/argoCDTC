@@ -36,6 +36,44 @@ export interface LocalContextUpdate {
   user: string;
 }
 
+export async function addOrUpdateLocalContext(contextName: string, server: string, authToken: string): Promise<void> {
+  const configPath = await localConfigPath();
+  const config = (await readLocalConfig(configPath)) ?? {};
+
+  // Add or update the context entry
+  const contexts = localContexts(config);
+  const existingCtx = contexts.find(c => text(c.name) === contextName);
+  if (existingCtx) {
+    existingCtx.server = server;
+    existingCtx.user = contextName;
+  } else {
+    contexts.push({ name: contextName, server, user: contextName });
+  }
+  config.contexts = contexts;
+
+  // Add server entry if not already present
+  const servers = localServers(config);
+  if (!servers.find(s => text(s.server) === server)) {
+    servers.push({ server });
+  }
+  config.servers = servers;
+
+  // Add or update user entry with auth-token
+  const users = localUsers(config);
+  const existingUser = users.find(u => text(u.name) === contextName);
+  if (existingUser) {
+    existingUser["auth-token"] = authToken;
+  } else {
+    users.push({ name: contextName, "auth-token": authToken });
+  }
+  config.users = users;
+
+  config["current-context"] = contextName;
+
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, YAML.stringify(config), "utf8");
+}
+
 export async function listLocalContexts(): Promise<ArgoContext[]> {
   const configPath = await localConfigPath();
   const config = await readLocalConfig(configPath);
