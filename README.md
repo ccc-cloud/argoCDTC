@@ -12,7 +12,7 @@ The extension intentionally uses the official `argocd` CLI as its execution laye
 - Project operations: create, details, and delete.
 - Repository operations: add, details, and remove.
 - Cluster operations: add, details, and remove.
-- Context switching, new-context login, and context removal from the Contexts view.
+- Context switching, new-context login, context editing, and context removal from the Contexts view.
 - Command catalog for the rest of Argo CD, including accounts, certificates, GPG keys, repository credentials, sync windows, admin export/import, and shell completion.
 - Escape hatch command: `Argo CD: Run Any CLI Command`.
 - YAML snippets for `Application`, multi-source `Application`, `AppProject`, and `ApplicationSet`.
@@ -71,6 +71,20 @@ code .
 ```
 
 Long-lived tokens should be treated like passwords. Prefer normal login for day-to-day interactive use unless your organization explicitly wants token-based access.
+
+### Token-Based Contexts
+
+`Argo CD Context: Add` supports token login. Choose `Token` to paste an existing Argo CD auth token, or choose `Generate token` to create a token for the current or named account with an expiration in days and immediately save it as the new context.
+
+The generated-token flow uses the Argo CD CLI command:
+
+```bash
+argocd account generate-token --expires-in 168h
+```
+
+Generating a token requires an existing valid login or other CLI authentication that can create account tokens for the selected server.
+
+`Argo CD Context: Edit` can update an existing saved context. Choose `Re-login / update credentials` to run the login flow again with the existing context name prefilled, or choose `Edit local name/server/user references` to edit the saved local Argo CD config entry directly.
 
 ### Expired Argo CD Session
 

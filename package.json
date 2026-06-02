@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.5",
+  "version": "0.1.8",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {
@@ -67,6 +67,7 @@
     "onCommand:argocd.cluster.remove",
     "onCommand:argocd.context.add",
     "onCommand:argocd.context.use",
+    "onCommand:argocd.context.edit",
     "onCommand:argocd.context.remove"
   ],
   "main": "./out/extension.js",
@@ -356,6 +357,11 @@
         "icon": "$(check)"
       },
       {
+        "command": "argocd.context.edit",
+        "title": "Argo CD Context: Edit",
+        "icon": "$(edit)"
+      },
+      {
         "command": "argocd.context.remove",
         "title": "Argo CD Context: Remove",
         "icon": "$(trash)"
@@ -491,14 +497,24 @@
           "group": "inline@1"
         },
         {
-          "command": "argocd.context.remove",
+          "command": "argocd.context.edit",
           "when": "view == argocdContexts && viewItem == argocdContext",
           "group": "inline@2"
         },
         {
           "command": "argocd.context.remove",
+          "when": "view == argocdContexts && viewItem == argocdContext",
+          "group": "inline@3"
+        },
+        {
+          "command": "argocd.context.edit",
           "when": "view == argocdContexts && viewItem == argocdContextCurrent",
           "group": "inline@1"
+        },
+        {
+          "command": "argocd.context.remove",
+          "when": "view == argocdContexts && viewItem == argocdContextCurrent",
+          "group": "inline@2"
         }
       ],
       "commandPalette": [

@@ -9,7 +9,7 @@ import {
   ArgoRepository,
   asArray
 } from "./models";
-import { listLocalContexts, removeLocalContext } from "./localConfig";
+import { editLocalContext, listLocalContexts, LocalContextUpdate, removeLocalContext } from "./localConfig";
 import { commandLine, runInTerminal, shellQuote } from "./terminal";
 
 export interface CliResult {
@@ -24,6 +24,7 @@ export interface RunOptions {
   allowFailure?: boolean;
   redact?: string[];
   streamOutput?: boolean;
+  suppressOutput?: boolean;
 }
 
 export class ArgoCdCli {
@@ -132,10 +133,10 @@ export class ArgoCdCli {
 
       child.on("close", code => {
         const result: CliResult = { stdout, stderr, code };
-        if (stdout.trim() && !options.streamOutput) {
+        if (stdout.trim() && !options.streamOutput && !options.suppressOutput) {
           this.output.appendLine(stdout.trimEnd());
         }
-        if (stderr.trim() && !options.streamOutput) {
+        if (stderr.trim() && !options.streamOutput && !options.suppressOutput) {
           this.output.appendLine(stderr.trimEnd());
         }
 
@@ -192,6 +193,10 @@ export class ArgoCdCli {
 
   async removeContext(name: string): Promise<void> {
     await removeLocalContext(name);
+  }
+
+  async editContext(name: string, update: LocalContextUpdate): Promise<void> {
+    await editLocalContext(name, update);
   }
 
   private config(): vscode.WorkspaceConfiguration {

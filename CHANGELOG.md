@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.8
+
+- Fixed token login and generate-token options not appearing in the Add/Edit Context flow due to a stale compiled bundle.
+- Fixed context edit command (`argocd.context.edit`) not found error caused by the same stale build.
+
+## 0.1.7
+
+- Added context editing from the Contexts view, including re-login/update-credentials and direct local name/server/user reference edits.
+
+## 0.1.6
+
+- Added token login to the Add Context flow.
+- Added an Add Context option to generate an account token with an expiration in days and save it as the new context.
+- Kept generated token output out of the Argo CD output channel.
+
 ## 0.1.5
 
 - Renamed the VS Code setting to `argocd.usersSessionDuration` so it appears reliably in Settings while still documenting the server-side `users.session.duration` key.

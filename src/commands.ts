@@ -74,12 +74,15 @@ export function registerCommands(
 
   register("argocd.context.add", () => addContext(cli, refreshAll));
   register("argocd.context.use", target => useContext(cli, target, refreshAll));
+  register("argocd.context.edit", target => editContext(cli, target, refreshAll));
   register("argocd.context.remove", target => removeContext(cli, target, refreshAll));
 }
 
 interface LoginOptions {
   title?: string;
   promptContextName?: boolean;
+  defaultServer?: string;
+  defaultContextName?: string;
 }
 
 async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptions = {}): Promise<void> {
@@ -87,7 +90,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
   const server = await showInputBox({
     title,
     prompt: "Argo CD server",
-    value: cli.server,
+    value: options.defaultServer ?? cli.server,
     placeHolder: "argocd.example.com"
   });
   if (!server) {
@@ -99,6 +102,7 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
     const input = await showInputBox({
       title,
       prompt: "Context name",
+      value: options.defaultContextName ?? "",
       placeHolder: "Defaults to the server name"
     });
     if (input === undefined) {
@@ -111,6 +115,8 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
   const method = await showQuickPick(
     [
       { label: "Username and password", value: "password" },
+      { label: "Token", value: "token" },
+      { label: "Generate token", value: "generateToken" },
       { label: "SSO", value: "sso" },
       { label: "Core mode", value: "core" }
     ],
@@ -127,6 +133,16 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
 
   if (method.value === "core") {
     cli.terminal(["login", ...contextArgs, "--core"], title, false);
+    return;
+  }
+
+  if (method.value === "token") {
+    await loginWithToken(cli, server, contextArgs, contextName, refreshAll, title);
+    return;
+  }
+
+  if (method.value === "generateToken") {
+    await generateTokenAndLogin(cli, server, contextArgs, contextName, refreshAll, title);
     return;
   }
 
@@ -150,6 +166,80 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
 
   await withProgress(cli, "Logging in to Argo CD", async () => {
     await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password] });
+    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
+    refreshAll();
+  });
+}
+
+async function loginWithToken(
+  cli: ArgoCdCli,
+  server: string,
+  contextArgs: string[],
+  contextName: string,
+  refreshAll: () => void,
+  title: string
+): Promise<void> {
+  const token = await showInputBox({
+    title,
+    prompt: "Argo CD auth token",
+    password: true
+  });
+  if (!token) {
+    return;
+  }
+
+  await withProgress(cli, "Logging in to Argo CD with token", async () => {
+    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token] });
+    vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
+    refreshAll();
+  });
+}
+
+async function generateTokenAndLogin(
+  cli: ArgoCdCli,
+  server: string,
+  contextArgs: string[],
+  contextName: string,
+  refreshAll: () => void,
+  title: string
+): Promise<void> {
+  const account = await showInputBox({
+    title,
+    prompt: "Account to generate the token for",
+    placeHolder: "Blank uses the current account"
+  });
+  if (account === undefined) {
+    return;
+  }
+
+  const daysInput = await showInputBox({
+    title,
+    prompt: "Token expiration in days",
+    value: "7",
+    validateInput: input => {
+      const days = Number(input);
+      return Number.isInteger(days) && days > 0 ? undefined : "Enter a whole number greater than 0";
+    }
+  });
+  if (!daysInput) {
+    return;
+  }
+
+  const days = Number(daysInput);
+  const expiresIn = `${days * 24}h`;
+  const accountArgs = account.trim() ? ["--account", account.trim()] : [];
+
+  await withProgress(cli, `Generating ${days}-day Argo CD token`, async () => {
+    const result = await cli.run(
+      ["account", "generate-token", ...accountArgs, "--expires-in", expiresIn, "--server", server],
+      { suppressOutput: true }
+    );
+    const token = result.stdout.trim();
+    if (!token) {
+      throw new Error("Argo CD did not return a token.");
+    }
+
+    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token] });
     vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
     refreshAll();
   });
@@ -672,6 +762,74 @@ async function useContext(cli: ArgoCdCli, target: unknown, refreshAll: () => voi
   });
 }
 
+async function editContext(cli: ArgoCdCli, target: unknown, refreshAll: () => void): Promise<void> {
+  const context = await selectContextValue(cli, target);
+  if (!context) {
+    return;
+  }
+
+  const mode = await showQuickPick(
+    [
+      { label: "Re-login / update credentials", value: "login" },
+      { label: "Edit local name/server/user references", value: "references" }
+    ],
+    { title: `Edit Context: ${context.name}` }
+  );
+  if (!mode) {
+    return;
+  }
+
+  if (mode.value === "login") {
+    await login(cli, refreshAll, {
+      title: `Edit Argo CD Context: ${context.name}`,
+      promptContextName: true,
+      defaultContextName: context.name,
+      defaultServer: context.server
+    });
+    return;
+  }
+
+  const nextName = await showInputBox({
+    title: `Edit Context: ${context.name}`,
+    prompt: "Context name",
+    value: context.name,
+    validateInput: input => input.trim() ? undefined : "Context name is required"
+  });
+  if (nextName === undefined) {
+    return;
+  }
+
+  const nextServer = await showInputBox({
+    title: `Edit Context: ${context.name}`,
+    prompt: "Server reference",
+    value: context.server ?? "",
+    placeHolder: "argocd.example.com"
+  });
+  if (nextServer === undefined) {
+    return;
+  }
+
+  const nextUser = await showInputBox({
+    title: `Edit Context: ${context.name}`,
+    prompt: "User reference",
+    value: context.user ?? "",
+    placeHolder: "Usually matches the server or account entry"
+  });
+  if (nextUser === undefined) {
+    return;
+  }
+
+  await withProgress(cli, `Editing context ${context.name}`, async () => {
+    await cli.editContext(context.name, {
+      name: nextName,
+      server: nextServer,
+      user: nextUser
+    });
+    vscode.window.showInformationMessage(`Updated Argo CD context ${nextName.trim()}`);
+    refreshAll();
+  });
+}
+
 async function removeContext(cli: ArgoCdCli, target: unknown, refreshAll: () => void): Promise<void> {
   const name = await selectContext(cli, target);
   if (!name) {
@@ -755,20 +913,26 @@ async function selectCluster(cli: ArgoCdCli, target: unknown): Promise<string | 
 }
 
 async function selectContext(cli: ArgoCdCli, target: unknown): Promise<string | undefined> {
+  return (await selectContextValue(cli, target))?.name;
+}
+
+async function selectContextValue(cli: ArgoCdCli, target: unknown): Promise<ArgoContext | undefined> {
   const direct = targetName(target, "context", value => (value as ArgoContext).name);
   if (direct) {
-    return direct;
+    const contexts = await cli.listContexts();
+    return contexts.find(context => context.name === direct) ?? { name: direct };
   }
   const contexts = await cli.listContexts();
   const picked = await showQuickPick(
     contexts.map(context => ({
       label: context.name,
       description: context.current ? "current" : context.server,
-      detail: context.raw
+      detail: context.raw,
+      context
     })),
     { title: "Select Argo CD context", matchOnDescription: true, matchOnDetail: true }
   );
-  return picked?.label;
+  return picked?.context;
 }
 
 function targetName(target: unknown, kind: string, extract: (value: unknown) => string): string | undefined {

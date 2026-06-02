@@ -30,6 +30,12 @@ interface LocalUser {
   [key: string]: unknown;
 }
 
+export interface LocalContextUpdate {
+  name: string;
+  server: string;
+  user: string;
+}
+
 export async function listLocalContexts(): Promise<ArgoContext[]> {
   const configPath = await localConfigPath();
   const config = await readLocalConfig(configPath);
@@ -99,6 +105,40 @@ export async function removeLocalContext(name: string): Promise<void> {
   if (isEmptyConfig(config)) {
     await fs.rm(configPath, { force: true });
     return;
+  }
+
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, YAML.stringify(config), "utf8");
+}
+
+export async function editLocalContext(name: string, update: LocalContextUpdate): Promise<void> {
+  const configPath = await localConfigPath();
+  const config = await readLocalConfig(configPath);
+  if (!config) {
+    throw new Error("No local Argo CD config found.");
+  }
+
+  const contexts = localContexts(config);
+  const target = contexts.find(context => text(context.name) === name);
+  if (!target) {
+    throw new Error(`Context ${name} does not exist.`);
+  }
+
+  const nextName = update.name.trim();
+  if (!nextName) {
+    throw new Error("Context name is required.");
+  }
+
+  if (nextName !== name && contexts.some(context => text(context.name) === nextName)) {
+    throw new Error(`Context ${nextName} already exists.`);
+  }
+
+  target.name = nextName;
+  target.server = update.server.trim();
+  target.user = update.user.trim();
+
+  if (text(config["current-context"]) === name) {
+    config["current-context"] = nextName;
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true });
