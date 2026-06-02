@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.14
+
+- When an operation fails because the server requires gRPC-Web, a notification now offers an **Enable gRPC-Web** button that sets `argocd.grpcWeb: true` automatically. No more digging through VS Code settings.
+
+## 0.1.13
+
+- Fixed `current-context unset` errors after login. The `--argocd-context` global flag is now stripped from `login` commands (it was causing "context not found" before the context is created). After every successful login, the extension now explicitly switches to the named context.
+
+## 0.1.12
+
+- Fixed "Generate token" hanging on a `Username:` prompt. The flow now asks for username/password upfront, logs in to create a session, generates the token from that session, then replaces the session with the token-based credential.
+
+## 0.1.11
+
+- All progress notifications now show a Cancel button. Cancelling kills the running CLI process immediately.
+
+## 0.1.10
+
+- Changed token expiration format from hours (`720h`) to days (`30d`) to match the ArgoCD CLI native format.
+- Changed default token expiration from 7 days to 30 days.
+
 ## 0.1.9
 
 - Fixed `account generate-token` and `login` commands failing with "no configuration has been provided" when the `argocd.core` setting is enabled. The `--core` and `--kube-context` flags are now stripped from global args whenever an explicit server connection is requested.

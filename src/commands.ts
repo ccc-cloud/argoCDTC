@@ -164,8 +164,11 @@ async function login(cli: ArgoCdCli, refreshAll: () => void, options: LoginOptio
     return;
   }
 
-  await withProgress(cli, "Logging in to Argo CD", async () => {
-    await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password] });
+  await withProgress(cli, "Logging in to Argo CD", async (cancel) => {
+    await cli.run(["login", server, ...contextArgs, "--username", username, "--password", password], { redact: [password], cancellationToken: cancel });
+    if (contextName) {
+      await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
+    }
     vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
     refreshAll();
   });
@@ -188,8 +191,11 @@ async function loginWithToken(
     return;
   }
 
-  await withProgress(cli, "Logging in to Argo CD with token", async () => {
-    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token] });
+  await withProgress(cli, "Logging in to Argo CD with token", async (cancel) => {
+    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token], cancellationToken: cancel });
+    if (contextName) {
+      await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
+    }
     vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
     refreshAll();
   });
@@ -203,6 +209,24 @@ async function generateTokenAndLogin(
   refreshAll: () => void,
   title: string
 ): Promise<void> {
+  const username = await showInputBox({
+    title,
+    prompt: "Username",
+    value: "admin"
+  });
+  if (!username) {
+    return;
+  }
+
+  const password = await showInputBox({
+    title,
+    prompt: "Password",
+    password: true
+  });
+  if (!password) {
+    return;
+  }
+
   const account = await showInputBox({
     title,
     prompt: "Account to generate the token for",
@@ -215,7 +239,7 @@ async function generateTokenAndLogin(
   const daysInput = await showInputBox({
     title,
     prompt: "Token expiration in days",
-    value: "7",
+    value: "30",
     validateInput: input => {
       const days = Number(input);
       return Number.isInteger(days) && days > 0 ? undefined : "Enter a whole number greater than 0";
@@ -226,20 +250,34 @@ async function generateTokenAndLogin(
   }
 
   const days = Number(daysInput);
-  const expiresIn = `${days * 24}h`;
+  const expiresIn = `${days}d`;
   const accountArgs = account.trim() ? ["--account", account.trim()] : [];
 
-  await withProgress(cli, `Generating ${days}-day Argo CD token`, async () => {
-    const result = await cli.run(
-      ["account", "generate-token", ...accountArgs, "--expires-in", expiresIn, "--server", server],
-      { suppressOutput: true }
+  await withProgress(cli, `Generating ${days}-day Argo CD token`, async (cancel) => {
+    // Login with username/password to establish an authenticated session
+    await cli.run(
+      ["login", server, ...contextArgs, "--username", username, "--password", password],
+      { redact: [password], cancellationToken: cancel }
     );
-    const token = result.stdout.trim();
-    if (!token) {
+
+    // Generate the API token using that session (no --server needed; uses current context)
+    const result = await cli.run(
+      ["account", "generate-token", ...accountArgs, "--expires-in", expiresIn],
+      { suppressOutput: true, cancellationToken: cancel }
+    );
+    const authToken = result.stdout.trim();
+    if (!authToken) {
       throw new Error("Argo CD did not return a token.");
     }
 
-    await cli.run(["login", server, ...contextArgs, "--auth-token", token], { redact: [token] });
+    // Replace the session credential with the long-lived token
+    await cli.run(
+      ["login", server, ...contextArgs, "--auth-token", authToken],
+      { redact: [authToken], cancellationToken: cancel }
+    );
+    if (contextName) {
+      await cli.run(["context", contextName], { includeGlobalArgs: false, cancellationToken: cancel });
+    }
     vscode.window.showInformationMessage(contextName ? `Added Argo CD context ${contextName}` : `Logged in to ${server}`);
     refreshAll();
   });
@@ -952,15 +990,37 @@ async function runText(cli: ArgoCdCli, title: string, args: string[]): Promise<v
   });
 }
 
-async function withProgress<T>(cli: ArgoCdCli, title: string, task: () => Promise<T>): Promise<T | undefined> {
+async function withProgress<T>(cli: ArgoCdCli, title: string, task: (token: vscode.CancellationToken) => Promise<T>): Promise<T | undefined> {
   try {
     return await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title, cancellable: false },
-      task
+      { location: vscode.ProgressLocation.Notification, title, cancellable: true },
+      (_progress, token) => task(token)
     );
   } catch (error) {
-    cli.output.show(true);
-    vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+    if (error instanceof vscode.CancellationError) {
+      return undefined;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    cli.output.appendLine(message);
+
+    const grpcWebHint = /grpc.web/i.test(message);
+    const grpcWebAlreadyOn = vscode.workspace.getConfiguration("argocd").get<boolean>("grpcWeb", false);
+    if (grpcWebHint && !grpcWebAlreadyOn) {
+      const action = await vscode.window.showErrorMessage(
+        "This Argo CD server requires gRPC-Web.",
+        "Enable gRPC-Web",
+        "Show Details"
+      );
+      if (action === "Enable gRPC-Web") {
+        await vscode.workspace.getConfiguration("argocd").update("grpcWeb", true, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage("gRPC-Web enabled. Please retry the operation.");
+      } else if (action === "Show Details") {
+        cli.output.show(true);
+      }
+    } else {
+      cli.output.show(true);
+      vscode.window.showErrorMessage(message);
+    }
     return undefined;
   }
 }

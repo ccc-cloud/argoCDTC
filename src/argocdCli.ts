@@ -25,6 +25,7 @@ export interface RunOptions {
   redact?: string[];
   streamOutput?: boolean;
   suppressOutput?: boolean;
+  cancellationToken?: vscode.CancellationToken;
 }
 
 export class ArgoCdCli {
@@ -85,6 +86,11 @@ export class ArgoCdCli {
     if (args[0] === "login" || args.includes("--server")) {
       global = stripKubeModeArgs(global);
     }
+    // --argocd-context is irrelevant for `login` (which uses --name to set the
+    // context name) and can cause "context not found" failures before the context exists.
+    if (args[0] === "login") {
+      global = stripArgWithValue(global, "--argocd-context");
+    }
     const allArgs = [...global, ...args];
     if (options.json && !allArgs.includes("-o") && !allArgs.includes("--output")) {
       allArgs.push("-o", "json");
@@ -110,6 +116,11 @@ export class ArgoCdCli {
         cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
         shell: false,
         env: process.env
+      });
+
+      options.cancellationToken?.onCancellationRequested(() => {
+        child.kill();
+        reject(new vscode.CancellationError());
       });
 
       let stdout = "";
@@ -274,12 +285,17 @@ function exampleArg(value: string): string {
 }
 
 function stripKubeModeArgs(args: string[]): string[] {
+  return stripArgWithValue(stripArgNoValue(args, "--core"), "--kube-context");
+}
+
+function stripArgNoValue(args: string[], flag: string): string[] {
+  return args.filter(arg => arg !== flag);
+}
+
+function stripArgWithValue(args: string[], flag: string): string[] {
   const result: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--core") {
-      continue;
-    }
-    if (args[i] === "--kube-context") {
+    if (args[i] === flag) {
       i++; // skip flag and its value
       continue;
     }
