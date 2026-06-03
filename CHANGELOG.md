@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.20
+
+## 0.1.19
+
+- Applications right-click menu now includes **Open in Argo Web**, which opens the selected application directly in the Argo CD web UI at `<server>/applications/<name>`.
+
 ## 0.1.18
 
 - Token login and "Generate token" token storage no longer call `argocd login --auth-token`, which was hanging because it tries to validate the token against the server via gRPC. The token is now written directly to the local ArgoCD config file — same result, no network call required.

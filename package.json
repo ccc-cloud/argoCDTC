@@ -2,7 +2,7 @@
   "name": "argocd-toolkit",
   "displayName": "Argo CD Toolkit",
   "description": "Manage Argo CD applications, projects, clusters, repositories, contexts, and CLI workflows from VS Code.",
-  "version": "0.1.18",
+  "version": "0.1.20",
   "publisher": "TripleC",
   "license": "MIT",
   "repository": {
@@ -311,6 +311,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "argocd.app.openInWeb",
+        "title": "Argo CD Application: Open in Argo Web",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "argocd.project.create",
         "title": "Argo CD: Create Project"
       },
@@ -460,6 +465,11 @@
           "command": "argocd.app.delete",
           "when": "view == argocdApplications && viewItem == argocdApp",
           "group": "4_danger"
+        },
+        {
+          "command": "argocd.app.openInWeb",
+          "when": "view == argocdApplications && viewItem == argocdApp",
+          "group": "2_application"
         },
         {
           "command": "argocd.project.get",

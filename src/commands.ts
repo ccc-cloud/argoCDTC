@@ -59,6 +59,7 @@ export function registerCommands(
   register("argocd.app.rollback", target => rollbackApplication(cli, target, refreshAll));
   register("argocd.app.terminateOperation", target => terminateOperation(cli, target, refreshAll));
   register("argocd.app.delete", target => deleteApplication(cli, target, refreshAll));
+  register("argocd.app.openInWeb", target => openApplicationInWeb(cli, target));
 
   register("argocd.project.create", () => createProject(cli, refreshAll));
   register("argocd.project.get", target => projectDetails(cli, target));
@@ -647,6 +648,24 @@ async function deleteApplication(cli: ArgoCdCli, target: unknown, refreshAll: ()
     vscode.window.showInformationMessage(`Deleted Argo CD application ${name}`);
     refreshAll();
   });
+}
+
+async function openApplicationInWeb(cli: ArgoCdCli, target: unknown): Promise<void> {
+  const name = await selectApplication(cli, target);
+  if (!name) {
+    return;
+  }
+  let server = cli.server;
+  if (!server) {
+    const contexts = await cli.listContexts();
+    server = contexts.find(c => c.current)?.server ?? contexts[0]?.server ?? "";
+  }
+  if (!server) {
+    vscode.window.showErrorMessage("No Argo CD server found. Log in or set argocd.defaultServer in settings.");
+    return;
+  }
+  const url = `${normalizeUrl(server)}/applications/${name}`;
+  await vscode.env.openExternal(vscode.Uri.parse(url));
 }
 
 async function createProject(cli: ArgoCdCli, refreshAll: () => void): Promise<void> {
